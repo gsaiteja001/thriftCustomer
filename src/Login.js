@@ -4,6 +4,8 @@ import { auth, googleProvider } from './firebaseConfig';
 import { signInWithPopup } from 'firebase/auth';
 import axios from 'axios';
 import LocationPicker from './pages/LocationPicker';
+import { GoogleLogin } from '@react-oauth/google';
+import { jwtDecode } from "jwt-decode";
 
 import GoogleIcon from './google.png';
 
@@ -40,7 +42,7 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     try {
-      const response = await axios.post('http://localhost:3000/api/login', { email, password });
+      const response = await axios.post('https://thriftstorebackend-8xii.onrender.com/api/login', { email, password });
       console.log('responsee....',response.data);
       const { token ,customer_id, cartId, wishlistId, addressID1,addressID2,addressID3,addressID4 } = response.data;
       console.log('response.data....',response.data);
@@ -60,6 +62,48 @@ const Login = () => {
       alert('Invalid credentials');
     }
   };
+
+
+
+
+  const handleGoogleLogin = async (credentialResponse) => {
+    try {
+      const credentials = jwtDecode(credentialResponse.credential);
+      const { name, email } = credentials;
+  
+      const response = await axios.post('https://thriftstorebackend-8xii.onrender.com/api/google-auth', {
+        name,
+        email,
+        phone: '000-000-0000',  // Default phone
+        address: 'Google User Address'  // Default address
+      });
+  
+      const { token, customer_id, cartId, wishlistId, addressID1, addressID2, addressID3, addressID4 } = response.data;
+  
+      // Store in localStorage
+      localStorage.setItem('customerId', customer_id);
+      localStorage.setItem('wishlistId', wishlistId);
+      localStorage.setItem('cartId', cartId);
+      localStorage.setItem('token', token);
+      localStorage.setItem('email', email);
+      localStorage.setItem('addressID1', addressID1);
+      localStorage.setItem('addressID2', addressID2);
+      localStorage.setItem('addressID3', addressID3);
+      localStorage.setItem('addressID4', addressID4);
+  
+      // Update state
+      setCartId(cartId);
+      setIsLoggedIn(true);
+      navigate('/EcommerceHome');
+    } catch (error) {
+      console.error('Google authentication failed:', error);
+      alert('Google login/signup failed');
+    }
+  };
+  
+  // In your GoogleLogin component
+
+
 
   const handleSocialLogin = async () => {
     try {
@@ -90,7 +134,7 @@ const Login = () => {
   };
 
   try {
-    const response = await axios.post('http://localhost:3000/api/signup', user);
+    const response = await axios.post('https://thriftstorebackend-8xii.onrender.com/api/signup', user);
     if (response.status === 201) {
       alert('Signup successful! Please log in.');
       setShowSignUp(false);
@@ -147,10 +191,10 @@ const Login = () => {
                 <Button type="submit">Login</Button>
               </form>
               <Or>or</Or>
-              <SocialLoginButton onClick={handleSocialLogin}>
-                <GoogleImg src={GoogleIcon} alt="Google" />
-                Continue with Google
-              </SocialLoginButton>
+              <GoogleLogin
+                  onSuccess={handleGoogleLogin}
+                  onError={() => console.log('Google Login Failed')}
+                /> 
               <ToggleLink onClick={() => setShowSignUp(true)}>
                 Don’t have an account? <strong>Sign up</strong>
               </ToggleLink>

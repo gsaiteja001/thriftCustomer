@@ -14,6 +14,24 @@ const styles = {
     marginBottom: '20px',
     color: '#333',
   },
+  tabs: {
+    display: 'flex',
+    justifyContent: 'flex-start',
+    marginBottom: '20px',
+    borderBottom: '2px solid #ddd',
+  },
+  tab: {
+    padding: '10px 20px',
+    cursor: 'pointer',
+    fontWeight: 'bold',
+    color: '#555',
+    borderBottom: '3px solid transparent',
+    transition: 'all 0.3s',
+  },
+  activeTab: {
+    borderBottom: '3px solid #007bff',
+    color: '#007bff',
+  },
   orderCard: {
     border: '1px solid #ddd',
     borderRadius: '8px',
@@ -30,7 +48,7 @@ const styles = {
   },
   orderStatus: {
     fontWeight: 'bold',
-    color: '#28a745', // green for completed
+    color: '#28a745',
   },
   itemList: {
     listStyleType: 'none',
@@ -62,23 +80,22 @@ const styles = {
   buttonHover: {
     backgroundColor: '#0056b3',
   },
-
   cartItemImage: {
     width: '100px',
     height: '100px',
     objectFit: 'cover',
     borderRadius: '8px',
     marginRight: '15px',
-},
+  },
 };
 
 const MyOrders = () => {
   const [orders, setOrders] = useState([]);
+  const [itemDetails, setItemDetails] = useState({});
   const [loading, setLoading] = useState(true);
-  const [itemDetails, setItemDetails] = useState({}); // Store item details by item_id
+  const [activeTab, setActiveTab] = useState('active'); // active, completed, cancelled
   const navigate = useNavigate();
 
-  // Fetch orders from the backend
   const fetchOrders = async () => {
     const customer_id = localStorage.getItem('customerId');
     if (!customer_id) {
@@ -87,34 +104,23 @@ const MyOrders = () => {
     }
 
     try {
-      const response = await axios.get(`http://localhost:3000/api/orders/${customer_id}`);
+      const response = await axios.get(`https://thriftstorebackend-8xii.onrender.com/api/orders/${customer_id}`);
       const groupedOrders = response.data;
 
-      // Log the response to verify the structure
-      console.log('Fetched orders:', groupedOrders);
-
-      // Check if the response is an object and convert to an array of values
       if (typeof groupedOrders === 'object') {
-        // Convert object to array of orders
         const ordersArray = Object.values(groupedOrders);
         setOrders(ordersArray);
-        setLoading(false);
-        fetchItemDetails(ordersArray); // After fetching orders, fetch item details
-      } else {
-        console.error('Expected orders to be an object, but got:', typeof groupedOrders);
-        setLoading(false);
+        fetchItemDetails(ordersArray);
       }
     } catch (error) {
       console.error('Error fetching orders:', error);
+    } finally {
       setLoading(false);
     }
   };
 
-  // Fetch additional item details
   const fetchItemDetails = async (ordersArray) => {
     const itemIds = [];
-
-    // Collect all item IDs from orders
     ordersArray.forEach((order) => {
       order.forEach((item) => {
         if (!itemIds.includes(item.item_id)) {
@@ -126,17 +132,15 @@ const MyOrders = () => {
     try {
       const details = await Promise.all(
         itemIds.map((id) =>
-          axios.get(`http://localhost:3000/api/item/${id}`).then((res) => res.data)
+          axios.get(`https://thriftstorebackend-8xii.onrender.com/api/item/${id}`).then((res) => res.data)
         )
       );
 
-      // Map the item details by item_id
       const itemDetailsMap = details.reduce((acc, detail) => {
         acc[detail.item_id] = detail;
         return acc;
       }, {});
-
-      setItemDetails(itemDetailsMap); // Store item details in the state
+      setItemDetails(itemDetailsMap);
     } catch (error) {
       console.error('Error fetching item details:', error);
     }
@@ -146,6 +150,37 @@ const MyOrders = () => {
     fetchOrders();
   }, []);
 
+  const getFilteredOrders = () => {
+    if (!orders || orders.length === 0) return [];
+
+    return orders.filter((orderGroup) => {
+      const status = orderGroup[0].order_status.toLowerCase();
+
+      if (activeTab === 'active') {
+        return status === 'placed' || status === 'shipped';
+      } else if (activeTab === 'completed') {
+        return status === 'delivered';
+      } else if (activeTab === 'cancelled') {
+        return status === 'cancelled' || status === 'approve_cancel';
+      }
+      return false;
+    });
+  };
+
+  const renderTab = (label, value) => (
+    <div
+      onClick={() => setActiveTab(value)}
+      style={{
+        ...styles.tab,
+        ...(activeTab === value ? styles.activeTab : {}),
+      }}
+    >
+      {label}
+    </div>
+  );
+
+  const filteredOrders = getFilteredOrders();
+
   if (loading) {
     return (
       <div style={styles.container}>
@@ -154,51 +189,55 @@ const MyOrders = () => {
     );
   }
 
-  if (!orders || orders.length === 0) {
-    return (
-      <div style={styles.container}>
-        <h1 style={styles.heading}>No Orders Found</h1>
-        <p style={{ color: '#777' }}>It looks like you don't have any orders yet.</p>
-      </div>
-    );
-  }
-
   return (
     <div style={styles.container}>
       <h1 style={styles.heading}>My Orders</h1>
-      {orders.map((order) => {
-        const orderDate = new Date(order[0].order_date).toLocaleDateString();
 
-        return (
+      <div style={styles.tabs}>
+        {renderTab('Active Orders', 'active')}
+        {renderTab('Completed Orders', 'completed')}
+        {renderTab('Cancelled Orders', 'cancelled')}
+      </div>
+
+      {filteredOrders.length === 0 ? (
+        <p style={{ color: '#777' }}>No {activeTab} orders found.</p>
+      ) : (
+        filteredOrders.map((order) => (
           <div key={order[0].order_id} style={styles.orderCard}>
             <div style={styles.orderInfo}>
               <div>
                 <strong>Order ID:</strong> {order[0].order_id}
               </div>
-              {/* <div>
-                <strong>Order Date:</strong> {orderDate}
-              </div> */}
-              <div style={styles.orderStatus}>
+              <div
+                style={{
+                  ...styles.orderStatus,
+                  color:
+                    order[0].order_status === 'delivered'
+                      ? '#28a745'
+                      : ['cancelled', 'approve_cancel'].includes(order[0].order_status)
+                      ? '#dc3545'
+                      : '#ffc107',
+                }}
+              >
                 <strong>Status:</strong> {order[0].order_status}
               </div>
+
             </div>
 
             <div style={styles.itemList}>
               {order.map((item) => {
-                const itemDetail = itemDetails[item.item_id]; // Get item details from state
-                console.log('item........',itemDetail );
+                const itemDetail = itemDetails[item.item_id];
                 return (
                   <div key={item.item_id} style={styles.itemCard}>
                     <div style={styles.itemTitle}>{item.item_name}</div>
                     <img
-                        src={itemDetail?.imageURL || 'path/to/default-image.jpg'} // Fallback to default image if imageURL is undefined
-                        alt={itemDetail?.item_name || 'Item Image'}  // Use item name as fallback for alt text
-                        style={styles.cartItemImage}
-                        />
+                      src={itemDetail?.imageURL || 'path/to/default-image.jpg'}
+                      alt={itemDetail?.item_name || 'Item Image'}
+                      style={styles.cartItemImage}
+                    />
                     <div style={styles.itemDetails}>
-                      <span>Quantity: {item.item_quantity}</span> |
-                      <span> Price: ${(parseFloat(item.item_price).toFixed(2))}</span> |
-
+                      <span>Quantity: {item.item_quantity}</span> |{' '}
+                      <span>Price: ${parseFloat(item.item_price).toFixed(2)}</span>
                     </div>
                   </div>
                 );
@@ -206,7 +245,7 @@ const MyOrders = () => {
             </div>
 
             <div>
-            <button
+              <button
                 style={styles.button}
                 onMouseEnter={(e) =>
                   (e.target.style.backgroundColor = styles.buttonHover.backgroundColor)
@@ -214,15 +253,14 @@ const MyOrders = () => {
                 onMouseLeave={(e) =>
                   (e.target.style.backgroundColor = styles.button.backgroundColor)
                 }
-                // On click navigate and pass the order details in state
                 onClick={() => navigate('/orderDetails', { state: { order } })}
               >
                 View Order Details
               </button>
             </div>
           </div>
-        );
-      })}
+        ))
+      )}
     </div>
   );
 };

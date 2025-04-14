@@ -90,7 +90,7 @@ const WishlistPage = () => {
     const fetchProducts = async () => {
       setLoading(true);
       try {
-        const response = await axios.get('http://localhost:3000/api/item/items');
+        const response = await axios.get('https://thriftstorebackend-8xii.onrender.com/api/item/items');
         console.log('allresponse....',response.data);
         setProducts(response.data);
       } catch (error) {

@@ -156,7 +156,7 @@ const Checkout = () => {
         const fetchItemDetails = async () => {
             const itemIds = storedCartItems.map(item => item.item_id);
             const details = await Promise.all(
-                itemIds.map(id => axios.get(`http://localhost:3000/api/item/${id}`).then(res => res.data))
+                itemIds.map(id => axios.get(`https://thriftstorebackend-8xii.onrender.com/api/item/${id}`).then(res => res.data))
             );
             setItemsDetails(details);
         };
@@ -165,48 +165,59 @@ const Checkout = () => {
     }, []);
 
 
-
     const handlePlaceOrder = async () => {
-        // Gather order details
         const orderDate = new Date().toISOString(); 
-        const shippingAddress = address; 
+        const shippingAddress = address;
         const orderStatus = 'placed';  
-        const paymentStatus = 'paid';  
+        const paymentStatus = 'paid';
       
-        // Collect items details (item_id, quantity, price)
         const orderItems = cartItems.map(item => {
           const itemDetails = itemsDetails.find(detail => detail.item_id === item.item_id);
           return {
             item_id: item.item_id,
             item_quantity: item.quantity,
             item_price: itemDetails ? itemDetails.selling_price : 0,
+            vendor_id: itemDetails ? itemDetails.vendor_id : null
           };
         });
       
-        // Make an API request for each item in the cart
         try {
-          const orderRequests = orderItems.map(item => {
-            return axios.post('http://localhost:3000/api/order', {
+          for (const item of orderItems) {
+            // Step 1: Place Order
+            const orderRes = await axios.post('https://thriftstorebackend-8xii.onrender.com/api/order', {
               customer_id: customer_id, 
               order_date: orderDate,
               order_status: orderStatus,
               payment_status: paymentStatus,
-              shipping_address: JSON.stringify(shippingAddress),  
-              shipping_id: null, 
+              shipping_address: JSON.stringify(shippingAddress),
+              shipping_id: null,
               item_id: item.item_id,
               item_quantity: item.item_quantity,
               item_price: item.item_price,
             });
-          });
       
-          // Wait for all orders to be placed
-          await Promise.all(orderRequests);
-          alert('Order placed successfully!');
+            const order_id = orderRes.data.order_id;
+      
+            // Step 2: Record Payment Transaction
+            // await axios.post('https://thriftstorebackend-8xii.onrender.com/api/payment/record', {
+            //   order_id,
+            //   item_id: item.item_id,
+            //   vendor_id: item.vendor_id,
+            //   payment_amount: item.item_price,
+            //   payment_method: 'card',
+            //   status: 'paid'
+            // });
+          }
+      
+          alert('Order & payment recorded successfully!');
+          setCartItems([]);
+          localStorage.removeItem('cart-items');
         } catch (error) {
-          console.error('Error placing order:', error);
+          console.error('Error placing order or recording payment:', error);
           alert('There was an error placing the order. Please try again.');
         }
       };
+      
       
 
     const handleStepClick = (stepNumber) => {
